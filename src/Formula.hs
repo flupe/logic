@@ -35,7 +35,16 @@ data Term a where
 
     Forall :: [String] -> Term Bool -> Term Bool
     Exists :: [String] -> Term Bool -> Term Bool
+
+    -- how do we specify the type of the comprehension???
+    -- depending on whether we bind on several variables, could be a product
     Comprehension :: [String] -> Term Bool -> Term (Set a)
+
+    In :: Term a -> Term (Set a) -> Term Bool
+    Card :: Term (Set a) -> Term Int
+    Union :: Term (Set a) -> Term (Set a) -> Term (Set a)
+    Intersection :: Term (Set a) -> Term (Set a) -> Term (Set a)
+    Subset :: Term (Set a) -> Term (Set a) -> Term Bool
 
 
 type Formula = Term Bool
@@ -62,6 +71,11 @@ instance Show (Term a) where
     show (Forall v t)   = "∀" ++ intercalate " " v ++ ".(" ++ show t ++ ")"
     show (Exists v t)   = "∃" ++ intercalate " " v ++ ".(" ++ show t ++ ")"
     show (Comprehension v t)   = "{" ++ intercalate " " v ++ " | " ++ show t ++ "}"
+    show (In x t)   = show x ++ " in " ++ show t
+    show (Card t)   = "|" ++ show t ++ "|"
+    show (Union a b)   = show a ++ " u " ++ show b
+    show (Intersection a b)   = show a ++ " n " ++ show b
+    show (Subset a b)   = show a ++ " c " ++ show b
 
 
 instance Num (Term Int) where
