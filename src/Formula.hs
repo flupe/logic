@@ -1,38 +1,21 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
+
 
 module Formula where
 
-import Prelude hiding ((<), (>), (==))
-import Language.Haskell.TH
-import Language.Haskell.TH.Quote
+import Data.List (intercalate)
 
-infix  5 ≤, ≥, <, >
-infixl 3 ∧
-infixl 2 ∨
-infixr 1 ==>
-
-(≤) = Leq
-(<) = Lt
-(>) a b = a < b
-(≥) a b = b ≤ a
-(∧) = And
-(∨) = Or
-(===) = Eq
-(==>) = Implies
-
-
-data Var a = Var String
-
+data Set a
 
 data Term a where
     BLit :: Bool -> Term Bool
     ILit :: Int -> Term Int
-    TVar :: Var a -> Term a
+    Var :: String -> Term a
 
     UninterpretedFunc :: String -> Term (a -> b)
     App :: Term (a -> b) -> Term a -> Term b
@@ -50,11 +33,18 @@ data Term a where
     Mult    :: Term Int  -> Term Int  -> Term Int
     Div     :: Term Int  -> Term Int  -> Term Int
 
+    Forall :: [String] -> Term Bool -> Term Bool
+    Exists :: [String] -> Term Bool -> Term Bool
+    Comprehension :: [String] -> Term Bool -> Term (Set a)
+
+
+type Formula = Term Bool
+
 
 instance Show (Term a) where
     show (BLit x) = show x
     show (ILit x) = show x
-    show (TVar (Var x)) = x
+    show (Var x) = x
     show (UninterpretedFunc x) = x
     show (App f x) = show f ++ "(" ++ show x ++ ")"
     show (Not x) = "¬" ++ show x
@@ -69,6 +59,9 @@ instance Show (Term a) where
     show (Minus a b) = "(" ++ show a ++ " - " ++ show b ++ ")"
     show (Mult a b)  = "(" ++ show a ++ " * " ++ show b ++ ")"
     show (Div a b)   = "(" ++ show a ++ " / " ++ show b ++ ")"
+    show (Forall v t)   = "∀" ++ intercalate " " v ++ ".(" ++ show t ++ ")"
+    show (Exists v t)   = "∃" ++ intercalate " " v ++ ".(" ++ show t ++ ")"
+    show (Comprehension v t)   = "{" ++ intercalate " " v ++ " | " ++ show t ++ "}"
 
 
 instance Num (Term Int) where
@@ -81,18 +74,18 @@ instance Num (Term Int) where
     fromInteger = ILit . fromInteger
 
 
-{-|
-  Transformer allowing the use of unbound identifiers,
-  which are automatically transformed into free logic variables.
-  It also permits the function application syntax for uninterpreted functions.
--}
-formula :: Q Exp -> Q Exp
-formula f = f >>= varify
-    where
-        varify :: Exp -> Q Exp
-        varify (AppE (VarE name) right) = AppE (AppE (ConE 'App) (VarE name)) <$> varify right
-        varify (UnboundVarE n) = return $ AppE (ConE 'Var) (LitE (StringL (show n)))
-        varify (AppE a b) = AppE <$> varify a <*> varify b
-        varify (InfixE a b c) = InfixE <$> mapM varify a <*> varify b <*> mapM varify c
-        varify (ParensE e) = ParensE <$> varify e
-        varify x = return x
+normalize :: Formula -> Formula
+normalize (Implies a b) = Or (Not a) b
+normalize (Neq a b)     = Not (Eq a b)
+normalize x = x
+
+
+simplifyBool :: Formula -> Formula
+simplifyBool (Eq (BLit x) other) = if x then other else Not other
+simplifyBool (Eq other (BLit x)) = if x then other else Not other
+simplifyBool (And l@(BLit x) other) = if x then other else l
+simplifyBool (And other r@(BLit x)) = if x then other else r
+simplifyBool (Or l@(BLit x) other) = if x then l else other
+simplifyBool (Or other r@(BLit x)) = if x then r else other
+simplifyBool (Not (BLit x)) = BLit (not x)
+simplifyBool x = x

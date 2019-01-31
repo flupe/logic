@@ -1,25 +1,33 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Main where
 
 import Formula
+import Formula.Utils
 
-dat  = UninterpretedFunc "data"  :: Term (Int -> Int)
-dat' = UninterpretedFunc "data'" :: Term (Int -> Int)
+type Pid = Int
 
-decided  = UninterpretedFunc "decided"  :: Term (Int -> Bool)
-decided' = UninterpretedFunc "decided'" :: Term (Int -> Bool)
 
-agreement :: Term Int -> Term Int -> Term Bool
-agreement i j =
-    $(formula [| decided(i) ∧ decided(j) ==> dat(i) === dat(j) |])
+ite :: Formula -> Formula -> Formula -> Formula
+ite a b c = (Not a ∨ b) ∧ (a ∨ c)
 
-integrity :: Term Int -> Term Bool
-integrity i =
-    $(formula [| decided(i) ==> decided'(i) ∧ dat(i) === dat'(i) |])
+mmor = UninterpretedFunc "mmor" :: Term (Pid -> Int)
+
+decided  = UninterpretedFunc "decided"  :: Term (Pid -> Bool)
+decided' = UninterpretedFunc "decided'" :: Term (Pid -> Bool)
+
+dat     = UninterpretedFunc "data"    :: Term (Pid -> Int)
+dat0    = UninterpretedFunc "data0"   :: Term (Pid -> Int)
+dat'    = UninterpretedFunc "data'"   :: Term (Pid -> Int)
+
+
+agreement   = $(formula [| Forall [i, j] (decided(i) ∧ decided(j) ⇒ dat(i) ≡ dat(j)) |])
+integrity   = $(formula [| Forall i (decided(i) ⇒ decided'(i) ∧ dat(i) ≡ dat'(i)) |])
+termination = $(formula [| Forall i (decided(i)) |])
+validity    = $(formula [| Forall i (Exists j (dat(i) ≡ dat0(j))) |])
+
+invariantAgreement = $(formula [| Forall i (Not (decided(i))) ∨
+                                  Exists v (Forall i (decided(i) ⇒ dat(i) ≡ v)) |])
 
 main :: IO ()
-main = do
-    putStrLn $ show $ agreement 2 3
-    putStrLn $ show $ integrity 5
+main = putStrLn $ show $(formula [| Comprehension v (dat(v) ≡ 3) |])
