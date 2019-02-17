@@ -115,14 +115,19 @@ skipMany p = (p *> skipMany p) <|> pure ()
 skipMany1 :: Parser a -> Parser ()
 skipMany1 p = p *> skipMany p
 
--- | Match if all input has been consumed.
+-- | Succeeds if all input has been consumed.
 eoi :: Parser ()
 eoi = Parser \case
           [] -> Just ((), [])
           _  -> Nothing
 
+-- | Skip zero or more space characters.
 spaces :: Parser ()
 spaces = skipMany space
+
+-- | Match an occurence of @p@ surrounded by zero or more spaces.
+trim :: Parser a -> Parser a
+trim p = spaces *> p <* spaces
 
 ident :: Parser String
 ident = takeWhile1 isAlpha
@@ -130,33 +135,26 @@ ident = takeWhile1 isAlpha
 chainr1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 chainr1 p op = (p <**> op <*> (chainr1 p op)) <|> p
 
-groundFormula :: Parser Formula
-groundFormula = choice
-    [ "(" *> spaces *> formula <* spaces <* ")"
-    , FTrue  <$ ("⊤" <|> "true")
-    , FFalse <$ ("⊥" <|> "false")
-    , Var    <$> ident
-    ]
-
-andFormula :: Parser Formula
-andFormula = chainr1 groundFormula (And <$ spaces <* "∧" <* spaces)
-
-orFormula :: Parser Formula
-orFormula = chainr1 andFormula (Or <$ spaces <* "∨" <* spaces)
-
-implFormula :: Parser Formula
-implFormula = chainr1 orFormula (Implies <$ spaces <* ("=>" <|> "==>" <|> "⇒") <* spaces)
-
-quantifier :: ([String] -> Formula -> Formula) -> Parser a -> Parser Formula
-quantifier c p =
-    c <$ p <* spaces <*> sepBy1 ident space <* spaces <* "." <* spaces <*> formula
-
-formula :: Parser Formula
-formula = choice
-    [ quantifier Forall ("∀" <|> "forall")
-    , quantifier Exists ("∃" <|> "exists")
-    , implFormula
-    ]
 
 formulaParser :: Parser Formula
-formulaParser = spaces *> formula <* spaces <* eoi
+formulaParser = trim formula <* eoi
+    where
+        formula = choice
+            [ quantifier (Forall <$ ("∀" <|> ("forall" <* space)))
+            , quantifier (Exists <$ ("∃" <|> ("exists" <* space)))
+            , implFormula
+            ]
+
+        quantifier q =
+            q <*> trim (sepBy1 ident space) <* "." <* spaces <*> formula
+
+        implFormula = chainr1 orFormula     (Implies <$ trim ("=>" <|> "==>" <|> "⇒"))
+        orFormula   = chainr1 andFormula    (Or      <$ trim "∨")
+        andFormula  = chainr1 groundFormula (And     <$ trim "∧")
+
+        groundFormula = choice
+            [ "(" *> trim formula <* ")"
+            , FTrue  <$ ("⊤" <|> "true")
+            , FFalse <$ ("⊥" <|> "false")
+            , Var    <$> ident
+            ]
