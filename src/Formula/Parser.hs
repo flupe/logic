@@ -127,14 +127,36 @@ spaces = skipMany space
 ident :: Parser String
 ident = takeWhile1 isAlpha
 
-quantifier :: ([String] -> Formula -> Formula) -> Parser a -> Parser Formula
-quantifier c p =
-    c <$ p <* spaces <*> sepBy1 ident space <* spaces <* "." <* spaces <*> formulaParser
+chainr1 :: Parser a -> Parser (a -> a -> a) -> Parser a
+chainr1 p op = (p <**> op <*> (chainr1 p op)) <|> p
 
-formulaParser :: Parser Formula
-formulaParser = skipMany space *> choice
-    [ quantifier Forall ("∀" <|> "forall")
-    , quantifier Exists ("∃" <|> "exists")
+groundFormula :: Parser Formula
+groundFormula = choice
+    [ "(" *> spaces *> formula <* spaces <* ")"
     , FTrue  <$ ("⊤" <|> "true")
     , FFalse <$ ("⊥" <|> "false")
-    ] <* skipMany space
+    , Var    <$> ident
+    ]
+
+andFormula :: Parser Formula
+andFormula = chainr1 groundFormula (And <$ spaces <* "∧" <* spaces)
+
+orFormula :: Parser Formula
+orFormula = chainr1 andFormula (Or <$ spaces <* "∨" <* spaces)
+
+implFormula :: Parser Formula
+implFormula = chainr1 orFormula (Implies <$ spaces <* ("=>" <|> "==>" <|> "⇒") <* spaces)
+
+quantifier :: ([String] -> Formula -> Formula) -> Parser a -> Parser Formula
+quantifier c p =
+    c <$ p <* spaces <*> sepBy1 ident space <* spaces <* "." <* spaces <*> formula
+
+formula :: Parser Formula
+formula = choice
+    [ quantifier Forall ("∀" <|> "forall")
+    , quantifier Exists ("∃" <|> "exists")
+    , implFormula
+    ]
+
+formulaParser :: Parser Formula
+formulaParser = spaces *> formula <* spaces <* eoi
