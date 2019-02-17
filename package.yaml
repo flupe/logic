@@ -26,6 +26,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -j8
+    - -O0
     dependencies:
     - logic
 

@@ -30,8 +30,8 @@ data Formula
     | Eq  Formula Formula
     | Implies Formula Formula
     | Not Formula
-    | Forall [String] Formula
-    | Exists [String] Formula
+    | Forall String Formula
+    | Exists String Formula
     deriving (Eq, Show)
 
 
@@ -138,6 +138,7 @@ ident = takeWhile1 isAlpha
 chainr1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 chainr1 p op = (p <**> op <*> (chainr1 p op)) <|> p
 
+
 data ParserConfig a = ParserConfig
     { fTrue    :: a
     , fFalse   :: a
@@ -147,8 +148,8 @@ data ParserConfig a = ParserConfig
     , fEq      :: a -> a -> a
     , fImplies :: a -> a -> a
     , fNot     :: a -> a
-    , fForall  :: [String] -> a -> a
-    , fExists  :: [String] -> a -> a
+    , fForall  :: String -> a -> a
+    , fExists  :: String -> a -> a
     }
 
 
@@ -171,13 +172,17 @@ formulaParser :: ParserConfig a -> Parser a
 formulaParser pc = trim formula <* eoi
     where
         formula = choice
-            [ quantifier (fForall pc <$ ("∀" <|> ("forall" <* space)))
-            , quantifier (fExists pc <$ ("∃" <|> ("exists" <* space)))
+            [ quantifier (fForall pc) ("∀" <|> ("forall" <* space))
+            , quantifier (fExists pc) ("∃" <|> ("exists" <* space))
             , implFormula
             ]
 
-        quantifier q =
-            q <*> trim (sepBy1 ident space) <* "." <* spaces <*> formula
+        -- TODO(flupe): clean this
+        quantifier c q = Parser \s -> do
+            (_,    s) <- parse q s
+            (vars, s) <- parse (trim (sepBy1 ident space)) s
+            (f,    s) <- parse ("." *> spaces *> formula) s
+            return (foldr c f vars, s)
 
         implFormula = chainr1 orFormula (fImplies pc <$ trim ("=>" <|> "==>" <|> "⇒"))
         orFormula   = chainr1 andFormula (fOr pc <$ trim "∨")
@@ -188,4 +193,5 @@ formulaParser pc = trim formula <* eoi
             , fTrue pc  <$ ("⊤" <|> "true")
             , fFalse pc <$ ("⊥" <|> "false")
             , fVar pc   <$> ident
+            , fNot pc   <$ ("¬" <|> "not") <* spaces <*> groundFormula
             ]
