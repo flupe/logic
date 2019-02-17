@@ -1,9 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveTraversable #-}
 
 
 module Formula where
@@ -36,7 +33,7 @@ data Term a where
     Forall :: [String] -> Term Bool -> Term Bool
     Exists :: [String] -> Term Bool -> Term Bool
 
-    -- how do we specify the type of the comprehension???
+    -- how do we specify the type of the comprehension?
     -- depending on whether we bind on several variables, could be a product
     Comprehension :: [String] -> Term Bool -> Term (Set a)
 

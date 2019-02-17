@@ -34,14 +34,14 @@ infixr 1 ⇒
   which are automatically transformed into free logic variables.
   It also permits the function application syntax for uninterpreted functions.
 
-  TODO: add a context and use let bindings to ensure that typing is correct
+  TODO: Add a context and use let bindings to ensure that typing is correct
         for bound variables (if we stick with GADTs)
 -}
 formula :: Q Exp -> Q Exp
 formula f = f >>= varify
     where
-        -- overload bindings: Forall [i, j] → Forall ["i", "j"]
-        --                    Forall i      → Forall ["i"]
+        -- Overload binding constructors: Forall [i, j] → Forall ["i", "j"]
+        --                                Forall i      → Forall ["i"]
         varify (AppE (ConE binding) right)
             | binding == 'Forall
             || binding == 'Exists
@@ -51,7 +51,7 @@ formula f = f >>= varify
                     ListE vars -> map bind vars
                     x -> [bind x]
 
-        -- overload function application: decided(i) → App(decided, i)
+        -- Overload function application: decided(i) → App(decided, i)
         varify (AppE (VarE name) right) =
             AppE (AppE (ConE 'App) (VarE name)) <$> varify right
 
