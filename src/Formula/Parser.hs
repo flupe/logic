@@ -36,7 +36,10 @@ data Formula
 
 
 parseFormula :: String -> Maybe Formula
-parseFormula s = fst <$> parse formulaParser s
+parseFormula = parseFormula' defaultConfig
+
+parseFormula' :: ParserConfig a -> String -> Maybe a
+parseFormula' pc = fmap fst . parse (formulaParser pc)
 
 
 instance Functor Parser where
@@ -135,26 +138,54 @@ ident = takeWhile1 isAlpha
 chainr1 :: Parser a -> Parser (a -> a -> a) -> Parser a
 chainr1 p op = (p <**> op <*> (chainr1 p op)) <|> p
 
+data ParserConfig a = ParserConfig
+    { fTrue    :: a
+    , fFalse   :: a
+    , fVar     :: String -> a
+    , fAnd     :: a -> a -> a
+    , fOr      :: a -> a -> a
+    , fEq      :: a -> a -> a
+    , fImplies :: a -> a -> a
+    , fNot     :: a -> a
+    , fForall  :: [String] -> a -> a
+    , fExists  :: [String] -> a -> a
+    }
 
-formulaParser :: Parser Formula
-formulaParser = trim formula <* eoi
+
+defaultConfig :: ParserConfig Formula
+defaultConfig = ParserConfig
+    { fTrue    = FTrue
+    , fFalse   = FFalse
+    , fVar     = Var
+    , fAnd     = And
+    , fOr      = Or
+    , fEq      = Eq
+    , fImplies = Implies
+    , fNot     = Not
+    , fForall  = Forall
+    , fExists  = Exists
+    }
+
+
+formulaParser :: ParserConfig a -> Parser a
+formulaParser pc = trim formula <* eoi
     where
         formula = choice
-            [ quantifier (Forall <$ ("∀" <|> ("forall" <* space)))
-            , quantifier (Exists <$ ("∃" <|> ("exists" <* space)))
+            [ quantifier (fForall pc <$ ("∀" <|> ("forall" <* space)))
+            , quantifier (fExists pc <$ ("∃" <|> ("exists" <* space)))
             , implFormula
             ]
 
         quantifier q =
             q <*> trim (sepBy1 ident space) <* "." <* spaces <*> formula
 
-        implFormula = chainr1 orFormula     (Implies <$ trim ("=>" <|> "==>" <|> "⇒"))
-        orFormula   = chainr1 andFormula    (Or      <$ trim "∨")
-        andFormula  = chainr1 groundFormula (And     <$ trim "∧")
+        implFormula = chainr1 orFormula (fImplies pc <$ trim ("=>" <|> "==>" <|> "⇒"))
+        orFormula   = chainr1 andFormula (fOr pc <$ trim "∨")
+        andFormula  = chainr1 groundFormula (fAnd pc <$ trim "∧")
 
         groundFormula = choice
             [ "(" *> trim formula <* ")"
-            , FTrue  <$ ("⊤" <|> "true")
-            , FFalse <$ ("⊥" <|> "false")
-            , Var    <$> ident
+            , fTrue pc  <$ ("⊤" <|> "true")
+            , fFalse pc <$ ("⊥" <|> "false")
+            , fVar pc   <$> ident
             ]

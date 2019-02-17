@@ -3,69 +3,50 @@
 
 module Formula.Utils where
 
-import Formula
+-- import Formula
+import Formula.Parser
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Prelude hiding ((<), (>))
 import Debug.Trace (trace)
 
 
-infix  5 ≤, ≥, <, >
-infixl 3 ∧
-infixl 2 ∨
-infixr 1 ⇒
+expConfig :: ParserConfig Exp
+expConfig = ParserConfig
+    { fTrue = ConE 'FTrue
+    , fFalse = ConE 'FFalse
+    , fVar = \n -> AppE (ConE 'Var) (LitE (StringL n))
+    , fAnd = \a b -> AppE (AppE (ConE 'And) a) b
+    , fOr = \a b -> AppE (AppE (ConE 'Or) a) b
+    , fEq = \a b -> AppE (AppE (ConE 'Eq) a) b
+    , fImplies = \a b -> AppE (AppE (ConE 'Eq) a) b
+    , fNot = \a -> AppE (ConE 'Not) a
+    , fForall = \v f -> AppE (AppE (ConE 'Forall) (ListE $ map (LitE . StringL) v)) f
+    , fExists = \v f -> AppE (AppE (ConE 'Forall) (ListE $ map (LitE . StringL) v)) f
+    }
 
+patConfig :: ParserConfig Pat
+patConfig = ParserConfig
+    { fTrue = ConP 'FTrue []
+    , fFalse = ConP 'FFalse []
+    , fVar = \n -> VarP (mkName n)
+    , fAnd = \a b -> ConP 'And [a, b]
+    , fOr = \a b -> ConP 'Or [a, b]
+    , fEq = \a b -> ConP 'Eq [a, b]
+    , fImplies = \a b -> ConP 'Eq [a, b]
+    , fNot = \a -> ConP 'Not [a]
+    , fForall = \v f -> ConP 'Forall [ListP $ map (LitP . StringL) v, f]
+    , fExists = \v f -> ConP 'Exists [ListP $ map (LitP . StringL) v, f]
+    }
 
-(≤) = Leq
-(<) = Lt
-(>) a b = b < a
-(≥) a b = b ≤ a
-(/) = Div
+f :: QuasiQuoter
+f = QuasiQuoter
+    { quoteExp = quote expConfig
+    , quotePat = quote patConfig
+    }
 
-(∧) = And
-(∨) = Or
-(≡) = Eq
-(≢) = Neq
-(⇒) = Implies
-
-
-{-|
-  Transformer allowing the use of unbound identifiers,
-  which are automatically transformed into free logic variables.
-  It also permits the function application syntax for uninterpreted functions.
-
-  TODO: Add a context and use let bindings to ensure that typing is correct
-        for bound variables (if we stick with GADTs)
--}
-formula :: Q Exp -> Q Exp
-formula f = f >>= varify
-    where
-        -- Overload binding constructors: Forall [i, j] → Forall ["i", "j"]
-        --                                Forall i      → Forall ["i"]
-        varify (AppE (ConE binding) right)
-            | binding == 'Forall
-            || binding == 'Exists
-            || binding == 'Comprehension =
-            return $ AppE (ConE binding) . ListE $
-                case right of
-                    ListE vars -> map bind vars
-                    x -> [bind x]
-
-        -- Overload function application: decided(i) → App(decided, i)
-        varify (AppE (VarE name) right) =
-            AppE (AppE (ConE 'App) (VarE name)) <$> varify right
-
-        varify (UnboundVarE n) = return $
-            (AppE (ConE 'Var)
-                  (LitE (StringL (show n))))
-
-        varify (AppE a b) = AppE <$> varify a <*> varify b
-        varify (InfixE a b c) = InfixE <$> mapM varify a <*> varify b <*> mapM varify c
-        varify (ParensE e) = ParensE <$> varify e
-        varify x = return x
-
-
-        bind (UnboundVarE x) = LitE (StringL $ show x)
-        bind x@(LitE (StringL _)) = x
-        bind (VarE _) = error "Cannot use bound variables in bindings."
-        bind x = error "Can only use free variables in bindings."
+quote :: ParserConfig a -> String -> Q a
+quote pc input =
+    case parseFormula' pc input of
+        Just exp -> return exp
+        Nothing  -> fail ("error while parsing input \"" ++ input ++ "\"")
