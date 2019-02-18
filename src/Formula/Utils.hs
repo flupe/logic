@@ -3,6 +3,7 @@
 module Formula.Utils (f) where
 
 import Data.List (union)
+import Formula
 import Formula.Parser
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
@@ -14,35 +15,45 @@ variables whose name is in the given list stay symbolic and do not capture varia
 
 TODO: add variable syntax for quantifier variables names.
 -}
-toExp :: [String] -> Formula -> Exp
+toExp :: [(String, Type)] -> UFormula -> Exp
 toExp vars f = case f of
-    FTrue -> ConE 'FTrue
-    FFalse -> ConE 'FFalse
-    Var n | n `elem` vars -> AppE (ConE 'Var) (LitE (StringL n))
-    Var n -> VarE (mkName n)
-    And a b -> AppE (AppE (ConE 'And) (toExp vars a)) (toExp vars b)
-    Or a b -> AppE (AppE (ConE 'Or) (toExp vars a)) (toExp vars b)
-    Eq a b -> AppE (AppE (ConE 'Eq) (toExp vars a)) (toExp vars b)
-    Implies a b -> AppE (AppE (ConE 'Implies) (toExp vars a)) (toExp vars b)
-    Not f -> AppE (ConE 'Not) (toExp vars f)
-    Forall v f ->
-        AppE (AppE (ConE 'Forall) (LitE (StringL v))) (toExp (v:vars) f)
-    Exists v f ->
-        AppE (AppE (ConE 'Exists) (LitE (StringL v))) (toExp (v:vars) f)
+    UTrue -> ConE 'TTrue
+    UFalse -> ConE 'TFalse
+
+    UVar n -> case lookup n vars of
+        Just tp -> SigE (AppE (ConE 'Var) (LitE (StringL n))) (AppT (ConT ''Term) tp)
+        Nothing -> VarE (mkName n)
+
+    UAnd a b -> AppE (AppE (ConE 'And) (toExp vars a)) (toExp vars b)
+    UOr a b -> AppE (AppE (ConE 'Or) (toExp vars a)) (toExp vars b)
+    UEq a b -> AppE (AppE (ConE 'Eq) (toExp vars a)) (toExp vars b)
+
+    UImplies a b -> AppE (AppE (ConE 'Implies) (toExp vars a)) (toExp vars b)
+    UNot f -> AppE (ConE 'Not) (toExp vars f)
+
+    UForall v f ->
+        AppE (AppE (AppE (ConE 'Forall) (LitE (StringL v)))
+                   (ConE 'TBool))
+             (toExp ((v, ConT ''Bool):vars) f)
+
+    UExists v f ->
+        AppE (AppE (AppE (ConE 'Exists) (LitE (StringL v)))
+                   (ConE 'TBool))
+             (toExp ((v, ConT ''Bool):vars) f)
 
 
 patConfig :: ParserConfig Pat
 patConfig = ParserConfig
-    { fTrue = ConP 'FTrue []
-    , fFalse = ConP 'FFalse []
+    { fTrue = ConP 'TTrue []
+    , fFalse = ConP 'TFalse []
     , fVar = \n -> VarP (mkName n)
     , fAnd = \a b -> ConP 'And [a, b]
     , fOr = \a b -> ConP 'Or [a, b]
     , fEq = \a b -> ConP 'Eq [a, b]
     , fImplies = \a b -> ConP 'Eq [a, b]
     , fNot = \a -> ConP 'Not [a]
-    , fForall = \v f -> ConP 'Forall [VarP (mkName v), f]
-    , fExists = \v f -> ConP 'Exists [VarP (mkName v), f]
+    , fForall = \v f -> ConP 'Forall [VarP (mkName v), WildP, f]
+    , fExists = \v f -> ConP 'Exists [VarP (mkName v), WildP, f]
     }
 
 quote :: ParserConfig a -> String -> Q a

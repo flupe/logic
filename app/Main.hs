@@ -1,9 +1,12 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Main where
 
+import Formula
 import Formula.Parser
 import Formula.Utils
+import Solver
 
 simplify :: Formula -> Formula
 

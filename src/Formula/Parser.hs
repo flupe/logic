@@ -1,8 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -22,20 +19,21 @@ import Control.Monad
 newtype Parser a = Parser { parse :: String -> Maybe (a, String) }
 
 
-data Formula
-    = FTrue | FFalse
-    | Var String
-    | And Formula Formula
-    | Or  Formula Formula
-    | Eq  Formula Formula
-    | Implies Formula Formula
-    | Not Formula
-    | Forall String Formula
-    | Exists String Formula
+-- | Untyped formula representation.
+data UFormula
+    = UTrue | UFalse
+    | UVar String
+    | UAnd UFormula UFormula
+    | UOr  UFormula UFormula
+    | UEq  UFormula UFormula
+    | UImplies UFormula UFormula
+    | UNot UFormula
+    | UForall String UFormula
+    | UExists String UFormula
     deriving (Eq, Show)
 
 
-parseFormula :: String -> Maybe Formula
+parseFormula :: String -> Maybe UFormula
 parseFormula = parseFormula' defaultConfig
 
 parseFormula' :: ParserConfig a -> String -> Maybe a
@@ -49,10 +47,10 @@ instance Functor Parser where
 instance Applicative Parser where
     pure x    = Parser (Just . (x,))
     pa <*> pb = Parser parse'
-        where parse' s0 = do
-                  (f, s1) <- parse pa s0
-                  (x, s2) <- parse pb s1
-                  return (f x, s2)
+        where parse' s = do
+                  (f, s) <- parse pa s
+                  (x, s) <- parse pb s
+                  return (f x, s)
 
 
 instance Alternative Parser where
@@ -62,7 +60,6 @@ instance Alternative Parser where
 
 instance (a ~ String) => IsString (Parser a) where
     fromString = string
-
 
 -- | Apply the actions in order until one of them succeeds.
 choice :: [Parser a] -> Parser a
@@ -153,18 +150,18 @@ data ParserConfig a = ParserConfig
     }
 
 
-defaultConfig :: ParserConfig Formula
+defaultConfig :: ParserConfig UFormula
 defaultConfig = ParserConfig
-    { fTrue    = FTrue
-    , fFalse   = FFalse
-    , fVar     = Var
-    , fAnd     = And
-    , fOr      = Or
-    , fEq      = Eq
-    , fImplies = Implies
-    , fNot     = Not
-    , fForall  = Forall
-    , fExists  = Exists
+    { fTrue    = UTrue
+    , fFalse   = UFalse
+    , fVar     = UVar
+    , fAnd     = UAnd
+    , fOr      = UOr
+    , fEq      = UEq
+    , fImplies = UImplies
+    , fNot     = UNot
+    , fForall  = UForall
+    , fExists  = UExists
     }
 
 
@@ -172,26 +169,30 @@ formulaParser :: ParserConfig a -> Parser a
 formulaParser pc = trim formula <* eoi
     where
         formula = choice
-            [ quantifier (fForall pc) ("∀" <|> ("forall" <* space))
-            , quantifier (fExists pc) ("∃" <|> ("exists" <* space))
+            [ quantifier (fForall pc) ("∀" <|> "forall" <* space)
+            , quantifier (fExists pc) ("∃" <|> "exists" <* space)
             , implFormula
             ]
 
-        -- TODO(flupe): clean this
-        quantifier c q = Parser \s -> do
-            (_,    s) <- parse q s
-            (vars, s) <- parse (trim (sepBy1 ident space)) s
-            (f,    s) <- parse ("." *> spaces *> formula) s
-            return (foldr c f vars, s)
+        quantifier c q =
+            flip (foldr c)
+                <$> (q *> trim (sepBy1 ident space)) -- Q a b c
+                <* "." <* spaces                     -- .
+                <*> formula                          -- φ
 
-        implFormula = chainr1 orFormula (fImplies pc <$ trim ("=>" <|> "==>" <|> "⇒"))
-        orFormula   = chainr1 andFormula (fOr pc <$ trim "∨")
-        andFormula  = chainr1 groundFormula (fAnd pc <$ trim "∧")
+        implFormula = chainr1 orFormula
+            (fImplies pc <$ trim ("=>" <|> "==>" <|> "⇒" <|> "implies" <* space))
+
+        orFormula   = chainr1 andFormula
+            (fOr pc <$ trim ("∨" <|> "&&" <|> "and" <* space))
+
+        andFormula  = chainr1 groundFormula
+            (fAnd pc <$ trim ("∧" <|> "||" <|> "or" <* space))
 
         groundFormula = choice
             [ "(" *> trim formula <* ")"
             , fTrue pc  <$ ("⊤" <|> "true")
             , fFalse pc <$ ("⊥" <|> "false")
+            , fNot pc   <$ ("¬" <|> "not" <* space) <* spaces <*> groundFormula
             , fVar pc   <$> ident
-            , fNot pc   <$ ("¬" <|> "not") <* spaces <*> groundFormula
             ]

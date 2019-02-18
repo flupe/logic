@@ -14,6 +14,7 @@ description:         Please see the README on GitHub at <https://github.com/flup
 dependencies:
 - base >= 4.7 && < 5
 - template-haskell
+- sbv
 
 library:
   source-dirs: src
