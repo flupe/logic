@@ -9,7 +9,7 @@ module Formula.Parser where
 import Prelude hiding (takeWhile)
 import Data.List (uncons, stripPrefix, span)
 import Data.String (IsString(..))
-import Data.Char (isSpace, isAlpha)
+import Data.Char (isSpace, isAlpha, isDigit)
 import Data.Functor
 import Data.Bifunctor (first)
 import Control.Applicative
@@ -22,6 +22,7 @@ newtype Parser a = Parser { parse :: String -> Maybe (a, String) }
 -- | Untyped formula representation.
 data UFormula
     = UTrue | UFalse
+    | UILit Int
     | UVar String
     | UAnd UFormula UFormula
     | UOr  UFormula UFormula
@@ -139,6 +140,7 @@ chainr1 p op = (p <**> op <*> (chainr1 p op)) <|> p
 data ParserConfig a = ParserConfig
     { fTrue    :: a
     , fFalse   :: a
+    , fILit    :: Int -> a
     , fVar     :: String -> a
     , fAnd     :: a -> a -> a
     , fOr      :: a -> a -> a
@@ -154,6 +156,7 @@ defaultConfig :: ParserConfig UFormula
 defaultConfig = ParserConfig
     { fTrue    = UTrue
     , fFalse   = UFalse
+    , fILit    = UILit
     , fVar     = UVar
     , fAnd     = UAnd
     , fOr      = UOr
@@ -194,5 +197,6 @@ formulaParser pc = trim formula <* eoi
             , fTrue pc  <$ ("⊤" <|> "true")
             , fFalse pc <$ ("⊥" <|> "false")
             , fNot pc   <$ ("¬" <|> "not" <* space) <* spaces <*> groundFormula
+            , fILit pc <$> (read <$> takeWhile1 isDigit)
             , fVar pc   <$> ident
             ]

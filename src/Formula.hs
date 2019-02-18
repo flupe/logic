@@ -12,29 +12,32 @@ data Set a
 data Typ a where
     TBool :: Typ Bool
 
-data Term a where
-    TTrue :: Term Bool
-    TFalse :: Term Bool
+data Formula a where
+    TTrue :: Formula Bool
+    TFalse :: Formula Bool
 
-    Var :: String -> Term a
+    ILit :: Int -> Formula Int
 
-    Not     :: Term Bool -> Term Bool
-    Eq      :: Term Bool -> Term Bool -> Term Bool
-    And     :: Term Bool -> Term Bool -> Term Bool
-    Or      :: Term Bool -> Term Bool -> Term Bool
-    Implies :: Term Bool -> Term Bool -> Term Bool
+    Var :: String -> Formula a
 
-    Forall :: String -> Typ a -> Term Bool -> Term Bool
-    Exists :: String -> Typ a -> Term Bool -> Term Bool
+    Not     :: Formula Bool -> Formula Bool
+    Eq      :: Formula Bool -> Formula Bool -> Formula Bool
+    And     :: Formula Bool -> Formula Bool -> Formula Bool
+    Or      :: Formula Bool -> Formula Bool -> Formula Bool
+    Implies :: Formula Bool -> Formula Bool -> Formula Bool
+
+    Forall :: String -> Typ a -> Formula Bool -> Formula Bool
+    Exists :: String -> Typ a -> Formula Bool -> Formula Bool
 
 
-type Formula = Term Bool
+type Predicate = Formula Bool
 
 
-instance Show (Term a) where
+instance Show (Formula a) where
     show TTrue = "⊤"
     show TFalse = "⊥"
 
+    show (ILit x) = show x
     show (Var x) = x
 
     show (Not x) = "¬" ++ show x

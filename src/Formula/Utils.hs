@@ -19,9 +19,10 @@ toExp :: [(String, Type)] -> UFormula -> Exp
 toExp vars f = case f of
     UTrue -> ConE 'TTrue
     UFalse -> ConE 'TFalse
+    UILit x -> AppE (ConE 'ILit) (LitE (IntegerL $ toInteger x))
 
     UVar n -> case lookup n vars of
-        Just tp -> SigE (AppE (ConE 'Var) (LitE (StringL n))) (AppT (ConT ''Term) tp)
+        Just tp -> SigE (AppE (ConE 'Var) (LitE (StringL n))) (AppT (ConT ''Formula) tp)
         Nothing -> VarE (mkName n)
 
     UAnd a b -> AppE (AppE (ConE 'And) (toExp vars a)) (toExp vars b)
@@ -46,6 +47,7 @@ patConfig :: ParserConfig Pat
 patConfig = ParserConfig
     { fTrue = ConP 'TTrue []
     , fFalse = ConP 'TFalse []
+    , fILit = \x -> ConP 'ILit [LitP (IntegerL $ toInteger x)]
     , fVar = \n -> VarP (mkName n)
     , fAnd = \a b -> ConP 'And [a, b]
     , fOr = \a b -> ConP 'Or [a, b]

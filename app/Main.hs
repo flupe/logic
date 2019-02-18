@@ -6,9 +6,8 @@ module Main where
 import Formula
 import Formula.Parser
 import Formula.Utils
-import Solver
 
-simplify :: Formula -> Formula
+simplify :: Formula a -> Formula a
 
 simplify [f| ¬ ⊤ |]   = [f| ⊥ |]
 simplify [f| ¬ ⊥ |]   = [f| ⊤ |]
