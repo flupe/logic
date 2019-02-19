@@ -6,28 +6,28 @@
 module Formula where
 
 import Data.List (intercalate)
-
-data Set a
+import Data.SBV (SymVal)
+import Data.Typeable
 
 data Typ a where
     TBool :: Typ Bool
+    TInt  :: Typ Integer
 
 data Formula a where
     TTrue :: Formula Bool
     TFalse :: Formula Bool
 
-    ILit :: Int -> Formula Int
+    ILit :: Int -> Formula Integer
 
-    Var :: String -> Formula a
+    Var :: SymVal a => String -> Formula a
 
     Not     :: Formula Bool -> Formula Bool
-    Eq      :: Formula Bool -> Formula Bool -> Formula Bool
+    Eq      :: Typeable a => Formula a -> Formula a -> Formula Bool
     And     :: Formula Bool -> Formula Bool -> Formula Bool
     Or      :: Formula Bool -> Formula Bool -> Formula Bool
-    Implies :: Formula Bool -> Formula Bool -> Formula Bool
 
-    Forall :: String -> Typ a -> Formula Bool -> Formula Bool
-    Exists :: String -> Typ a -> Formula Bool -> Formula Bool
+    Forall :: SymVal a => String -> Typ a -> Formula Bool -> Formula Bool
+    Exists :: SymVal a => String -> Typ a -> Formula Bool -> Formula Bool
 
 
 type Predicate = Formula Bool
@@ -40,11 +40,14 @@ instance Show (Formula a) where
     show (ILit x) = show x
     show (Var x) = x
 
-    show (Not x) = "¬" ++ show x
     show (Eq a b) = show a ++ " = " ++ show b
+    show (Not (Eq a b)) = show a ++ " ≠ " ++ show b
+    show (Not v@(Var _)) = "¬" ++ show v
+    show (Not v@(Not _)) = "¬" ++ show v
+    show (Not x) = "¬(" ++ show x ++ ")"
     show (And a b) = "(" ++ show a ++ " ∧ " ++ show b ++ ")"
+    show (Or (Not a) b) = "(" ++ show a ++ " ⇒ " ++ show b ++ ")"
     show (Or a b)  = "(" ++ show a ++ " ∨ " ++ show b ++ ")"
-    show (Implies a b) = show a ++ " ⇒ " ++ show b
 
     show (Forall v tp t)   = "∀" ++ v ++ ". (" ++ show t ++ ")"
     show (Exists v tp t)   = "∃" ++ v ++ ".(" ++ show t ++ ")"

@@ -145,7 +145,6 @@ data ParserConfig a = ParserConfig
     , fAnd     :: a -> a -> a
     , fOr      :: a -> a -> a
     , fEq      :: a -> a -> a
-    , fImplies :: a -> a -> a
     , fNot     :: a -> a
     , fForall  :: String -> a -> a
     , fExists  :: String -> a -> a
@@ -161,7 +160,6 @@ defaultConfig = ParserConfig
     , fAnd     = UAnd
     , fOr      = UOr
     , fEq      = UEq
-    , fImplies = UImplies
     , fNot     = UNot
     , fForall  = UForall
     , fExists  = UExists
@@ -179,18 +177,22 @@ formulaParser pc = trim formula <* eoi
 
         quantifier c q =
             flip (foldr c)
-                <$> (q *> trim (sepBy1 ident space)) -- Q a b c
+                <$> (q *> trim (sepBy1 ((++) <$> ("$" <|> pure "") <*> ident) space)) -- Q a b c
                 <* "." <* spaces                     -- .
                 <*> formula                          -- φ
 
         implFormula = chainr1 orFormula
-            (fImplies pc <$ trim ("=>" <|> "==>" <|> "⇒" <|> "implies" <* space))
+            (implies <$ trim ("=>" <|> "==>" <|> "⇒" <|> "implies" <* space))
+            where
+                a `implies` b = fOr pc (fNot pc a) b
 
         orFormula   = chainr1 andFormula
             (fOr pc <$ trim ("∨" <|> "&&" <|> "and" <* space))
 
-        andFormula  = chainr1 groundFormula
+        andFormula  = chainr1 eqFormula
             (fAnd pc <$ trim ("∧" <|> "||" <|> "or" <* space))
+
+        eqFormula = fEq pc <$> groundFormula <* trim "=" <*> groundFormula <|> groundFormula
 
         groundFormula = choice
             [ "(" *> trim formula <* ")"
